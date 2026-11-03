@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sanal Kaleydoskop</title>
+<style>
+:root{--ink:#172554;--muted:#64748b;--line:#dbe3ef;--panel:#fff;--bg:#f3f6fb;--accent:#3157d5}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+header{padding:22px 26px 16px;text-align:center}header h1{margin:0;font-size:clamp(25px,4vw,36px);letter-spacing:-.04em}header p{margin:5px 0 0;color:var(--muted)}
+.app{max-width:1180px;margin:0 auto;padding:0 18px 26px;display:grid;grid-template-columns:290px minmax(0,1fr);gap:18px;align-items:start}
+.panel,.stage{background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:0 8px 26px #1e3a8a0b}
+.panel{padding:18px;display:grid;gap:17px}.group{display:grid;gap:8px}.group label,.label{font-weight:700;font-size:13px}.hint{font-size:12px;color:var(--muted)}
+select,input[type=range]{width:100%}select{padding:10px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);font:inherit}
+.colors{display:flex;gap:8px;flex-wrap:wrap}.swatch{width:29px;height:29px;border:2px solid white;border-radius:50%;box-shadow:0 0 0 1px #cbd5e1;cursor:pointer}.swatch.active{box-shadow:0 0 0 3px var(--accent)}input[type=color]{width:42px;height:34px;padding:2px;border:1px solid var(--line);border-radius:8px;background:white;vertical-align:middle}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}button{border:0;border-radius:10px;padding:11px 12px;font:700 13px system-ui;cursor:pointer;background:#e9eefb;color:var(--ink)}button.primary{background:var(--accent);color:white}button.dark{background:#172554;color:white}button:hover{filter:brightness(.97)}
+.stage{padding:16px;min-width:0}.stage-top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:0 2px 12px}.stage-top strong{font-size:14px}.stage-top span{font-size:12px;color:var(--muted)}.canvas-wrap{width:min(100%,760px);margin:auto;aspect-ratio:1;background:#fff;border-radius:14px;overflow:hidden;border:1px solid var(--line);touch-action:none}canvas{display:block;width:100%;height:100%;cursor:crosshair}.foot{margin:11px 3px 0;text-align:center;color:var(--muted);font-size:12px}
+@media(max-width:800px){.app{grid-template-columns:1fr}.panel{grid-template-columns:repeat(2,minmax(0,1fr))}.panel .actions{grid-column:1/-1}.stage{grid-row:1}.stage-top{flex-wrap:wrap}}
+@media(max-width:480px){header{padding:18px 14px 12px}.app{padding:0 10px 18px;gap:12px}.panel{padding:14px;gap:14px}.stage{padding:10px}}
+</style></head>
+<body>
+<header><h1>✦ Sanal Kaleydoskop</h1><p>Desenini çiz, aynalarda çoğalt ve kendi simetrik sanatını oluştur.</p></header>
+<main class="app">
+<aside class="panel">
+ <div class="group"><label for="tool">Desen aracı</label><select id="tool"><option value="pen">Serbest çizgi</option><option value="circle">Daire</option><option value="petal">Yaprak</option><option value="triangle">Üçgen</option><option value="star">Yıldız</option><option value="stamp">✦ Simetrik dokunuş (tek tık)</option></select></div>
+ <div class="group"><label for="symmetry">Ayna dilimi: <span id="symText">8</span></label><select id="symmetry"><option>4</option><option>6</option><option selected>8</option><option>10</option><option>12</option><option>16</option><option>20</option><option>24</option></select><div class="hint">Dilim sayısı arttıkça desen daha sık tekrarlanır.</div></div>
+ <div class="group"><span class="label">Renk paleti</span><div class="colors" id="colors"></div><div><input type="color" id="customColor" value="#ed315b"> <span class="hint">Özel renk seç</span></div></div>
+ <div class="group"><label for="size">Çizim boyutu: <span id="sizeText">8</span></label><input id="size" type="range" min="2" max="30" value="8"></div>
+ <div class="group"><label for="opacity">Saydamlık: <span id="opacityText">%90</span></label><input id="opacity" type="range" min="20" max="100" value="90"></div>
+ <div class="actions"><button id="undo">↶ Geri al</button><button id="clear">Temizle</button><button id="random">✧ Rastgele renkler</button><button id="rotate">↻ Döndür</button><button class="primary" id="lucky" style="grid-column:1/-1;font-size:15px;padding:14px">✦ Şansımı denemek istiyorum</button><button class="primary" id="save">PNG olarak kaydet</button></div>
+</aside>
+<section class="stage"><div class="stage-top"><strong>Çalışma alanı</strong><span>Çiz veya “Simetrik dokunuş” ile tek tıkla desen oluştur</span></div><div class="canvas-wrap"><canvas id="art" width="900" height="900"></canvas></div><div class="foot">İpucu: Merkeze yakın çizgiler, kaleydoskopta daha yoğun ve çiçeksi desenler oluşturur.</div></section>
+</main>
+<script>
+const canvas=document.getElementById('art'),ctx=canvas.getContext('2d');
+const $=id=>document.getElementById(id);let color='#ed315b',drawing=false,last=null,strokes=[],current=null,rotation=0,spinning=false,rafId=null,lastFrame=0;
+const palette=['#ed315b','#ff8a00','#ffc928','#55b947','#00a99d','#16a5df','#3157d5','#7139c8','#d92b9b','#172554','#ffffff'];
+function buildPalette(){palette.forEach(c=>{let b=document.createElement('button');b.className='swatch'+(c===color?' active':'');b.style.background=c;b.title=c;b.onclick=()=>{color=c;document.querySelectorAll('.swatch').forEach(x=>x.classList.toggle('active',x.title===c))};$('colors').append(b)})}buildPalette();
+function settings(){return {tool:$('tool').value,color, size:+$('size').value,opacity:+$('opacity').value/100,sym:+$('symmetry').value}}
+function drawShape(x1,y1,x2,y2,s){let dx=x2-x1,dy=y2-y1,angle=Math.atan2(dy,dx),len=Math.hypot(dx,dy);ctx.save();ctx.globalAlpha=s.opacity;ctx.fillStyle=s.color;ctx.strokeStyle=s.color;ctx.lineWidth=s.size;ctx.lineCap='round';ctx.lineJoin='round';
+ if(s.tool==='pen'){ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke()}
+ else {let x=x2,y=y2,r=Math.max(s.size*1.7,len||s.size*2);ctx.translate(x,y);ctx.rotate(angle);ctx.beginPath();
+ if(s.tool==='circle'){ctx.arc(0,0,r*.55,0,Math.PI*2);ctx.fill()}
+ if(s.tool==='petal'){ctx.ellipse(r*.45,0,r*.55,r*.24,0,0,Math.PI*2);ctx.fill()}
+ if(s.tool==='triangle'){ctx.moveTo(r,0);ctx.lineTo(-r*.55,-r*.58);ctx.lineTo(-r*.55,r*.58);ctx.closePath();ctx.fill()}
+ if(s.tool==='star'){for(let i=0;i<10;i++){let a=-Math.PI/2+i*Math.PI/5,rr=i%2?r*.42:r;let px=Math.cos(a)*rr,py=Math.sin(a)*rr;i?ctx.lineTo(px,py):ctx.moveTo(px,py)}ctx.closePath();ctx.fill()}
+ if(s.tool==='stamp'){const q=Math.max(s.size*2.2,10);for(let i=0;i<6;i++){let a=i*Math.PI/3;ctx.beginPath();ctx.arc(Math.cos(a)*q*.72,Math.sin(a)*q*.72,q*.42,0,Math.PI*2);ctx.fill()}ctx.beginPath();ctx.arc(0,0,q*.48,0,Math.PI*2);ctx.fill()}
+ }ctx.restore()}
+function render(){ctx.clearRect(0,0,900,900);ctx.fillStyle='#fff';ctx.fillRect(0,0,900,900);ctx.save();ctx.translate(450,450);ctx.rotate(rotation);let all=[...strokes];if(current)all.push(current);for(const st of all){let n=st.sym,step=Math.PI*2/n;for(let i=0;i<n;i++){ctx.save();ctx.rotate(i*step);drawShape(st.x1,st.y1,st.x2,st.y2,st);ctx.scale(1,-1);drawShape(st.x1,st.y1,st.x2,st.y2,st);ctx.restore()}}ctx.restore();}
+function point(e){let r=canvas.getBoundingClientRect();return {x:(e.clientX-r.left)*900/r.width-450,y:(e.clientY-r.top)*900/r.height-450}}
+canvas.addEventListener('pointerdown',e=>{e.preventDefault();canvas.setPointerCapture(e.pointerId);let p=point(e);if($('tool').value==='stamp'){strokes.push({...settings(),x1:p.x,y1:p.y,x2:p.x,y2:p.y});render();return}drawing=true;current={...settings(),x1:p.x,y1:p.y,x2:p.x,y2:p.y};render()});
+canvas.addEventListener('pointermove',e=>{if(!drawing||!current)return;e.preventDefault();let p=point(e);current.x2=p.x;current.y2=p.y;render();if(current.tool==='pen'){current.x1=p.x;current.y1=p.y}});
+function finish(){if(!drawing)return;drawing=false;if(current){strokes.push(current);current=null;render()}}
+canvas.addEventListener('pointerup',finish);canvas.addEventListener('pointercancel',finish);$('symmetry').onchange=()=>{$('symText').textContent=$('symmetry').value};$('size').oninput=()=>{$('sizeText').textContent=$('size').value};$('opacity').oninput=()=>{$('opacityText').textContent='%'+$('opacity').value};
+function luckyPattern(){
+ const colors=['#ed315b','#ff8a00','#ffc928','#55b947','#3157d5','#7139c8','#d92b9b','#f04468'];
+ const pick=a=>a[Math.floor(Math.random()*a.length)];
+ const sym=pick([8,10,12,16,20,24]);
+ $('symmetry').value=String(sym);$('symText').textContent=String(sym);
+ strokes=[];current=null;rotation=0;
+ // Her halka için tek bir motif çizilir; render() bunu tüm ayna dilimlerine çoğaltır.
+ const rings=[
+  {r:22,tool:'star',size:17,len:25},
+  {r:83,tool:'petal',size:24,len:45},
+  {r:155,tool:pick(['triangle','star','petal']),size:29,len:55},
+  {r:245,tool:pick(['triangle','star','circle']),size:34,len:65},
+  {r:345,tool:pick(['triangle','petal','stamp']),size:38,len:72},
+  {r:425,tool:pick(['triangle','star','stamp']),size:43,len:80}
+ ];
+ rings.forEach((ring,i)=>{
+  const a=-Math.PI/2+(Math.random()-.5)*.12;
+  const x=Math.cos(a)*ring.r,y=Math.sin(a)*ring.r;
+  const angle=a+(Math.random()-.5)*.22;
+  strokes.push({tool:ring.tool,color:pick(colors),size:ring.size*(.85+Math.random()*.3),opacity:.94,sym,
+   x1:x,y1:y,x2:x+Math.cos(angle)*ring.len,y2:y+Math.sin(angle)*ring.len});
+  // Bazı halkalara ikinci, daha küçük ve farklı renkli motif ekle.
+  if(i===2||i===4){
+   const rr=ring.r+24,xx=Math.cos(a)*rr,yy=Math.sin(a)*rr;
+   strokes.push({tool:pick(['star','petal','triangle']),color:pick(colors),size:ring.size*.55,opacity:.96,sym,
+    x1:xx,y1:yy,x2:xx+Math.cos(angle)*ring.len*.65,y2:yy+Math.sin(angle)*ring.len*.65});
+  }
+ });
+ // Dış çemberde renkli noktalar, örnekteki yoğun bordürü oluşturur.
+ for(let i=0;i<sym;i++){
+  const a=-Math.PI/2+i*Math.PI*2/sym;
+  const r=390,x=Math.cos(a)*r,y=Math.sin(a)*r;
+  strokes.push({tool:'circle',color:pick(colors),size:12+Math.random()*10,opacity:.9,sym:1,
+   x1:x,y1:y,x2:x+1,y2:y+1});
+ }
+ render();
+}
+$('lucky').onclick=luckyPattern;
+function spinFrame(timestamp){if(!spinning)return;if(lastFrame){const elapsed=Math.min(timestamp-lastFrame,50);rotation=(rotation+elapsed*0.00055)%(Math.PI*2);render()}lastFrame=timestamp;rafId=requestAnimationFrame(spinFrame)}
+function toggleSpin(){spinning=!spinning;const btn=$('rotate');if(spinning){btn.textContent='Ⅱ Durdur';btn.classList.add('dark');lastFrame=0;rafId=requestAnimationFrame(spinFrame)}else{btn.textContent='↻ Döndür';btn.classList.remove('dark');if(rafId!==null)cancelAnimationFrame(rafId);rafId=null;lastFrame=0}}
+$('rotate').onclick=toggleSpin;$('clear').onclick=()=>{strokes=[];current=null;render()};$('undo').onclick=()=>{strokes.pop();render()};$('random').onclick=()=>{let c=palette[Math.floor(Math.random()*palette.length)];color=c;document.querySelectorAll('.swatch').forEach(x=>x.classList.toggle('active',x.title===c))};$('customColor').oninput=e=>{color=e.target.value;document.querySelectorAll('.swatch').forEach(x=>x.classList.remove('active'))};$('save').onclick=()=>{let a=document.createElement('a');a.download='sanal-kaleydoskop.png';a.href=canvas.toDataURL('image/png');a.click()};render();
+</script></body></html>
