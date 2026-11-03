@@ -1,4 +1,5 @@
 # ✦ Sanal Kaleydoskop
+https://mehmetdoqan.github.io/kaleydoskop/
 
 Tarayıcı üzerinden çalışan, çizim ve simetri mantığını bir araya getiren etkileşimli bir kaleydoskop uygulaması.
 
